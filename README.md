@@ -189,11 +189,14 @@ Copy the example environment file:
 cp .env.example .env.local
 ```
 
-Add your OpenAI API key to `.env.local`:
+Add a provider API key to `.env.local`. Groq is supported with its OpenAI-compatible endpoint:
 
 ```env
-OPENAI_API_KEY=sk-proj-your_openai_api_key_here
+GROQ_API_KEY=your_groq_api_key
+GROQ_MODEL=qwen/qwen3.8-27b
 ```
+
+Gemini (`GEMINI_API_KEY`) and OpenAI (`OPENAI_API_KEY`) are also supported.
 
 > **Note**: Even without an API key, Festiva works out-of-the-box using the built-in demo dataset!
 

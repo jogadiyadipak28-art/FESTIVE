@@ -1,27 +1,42 @@
 import OpenAI from "openai";
+import { zodResponseFormat } from "openai/helpers/zod";
 import { z, type ZodType } from "zod";
 import { SYSTEM_GUARDRAILS } from "@/lib/prompts";
 import type { AiCallMeta } from "@/lib/types";
 import { estimateTokens } from "@/lib/utils";
 import { ValidationError } from "@/lib/validate";
 
+const groqKey = process.env.GROQ_API_KEY;
 const geminiKey = process.env.GEMINI_API_KEY;
 const openaiKey = process.env.OPENAI_API_KEY;
+const usingGroq = Boolean(groqKey);
 const usingGemini = Boolean(geminiKey);
-const geminiModel = process.env.GEMINI_MODEL || "gemini-3.8-flash";
-export const MODEL = usingGemini
-  ? geminiModel
-  : process.env.OPENAI_MODEL || "gpt-4o-mini";
+const selectedModel = usingGroq
+  ? process.env.GROQ_MODEL || "qwen/qwen3.8-27b"
+  : usingGemini
+    ? process.env.GEMINI_MODEL || "gemini-3.8-flash"
+    : process.env.OPENAI_MODEL || "gpt-4o-mini";
+export const MODEL = selectedModel;
 
 const summarySchema = z.object({
   summary: z.string().min(1).max(2000),
 });
 
 export function hasLiveKey(): boolean {
-  return Boolean((geminiKey && geminiKey !== "demo") || (openaiKey && openaiKey !== "demo"));
+  return Boolean(
+    (groqKey && groqKey !== "demo") ||
+    (geminiKey && geminiKey !== "demo") ||
+    (openaiKey && openaiKey !== "demo")
+  );
 }
 
 function client(): OpenAI {
+  if (usingGroq) {
+    return new OpenAI({
+      apiKey: groqKey,
+      baseURL: "https://api.groq.com/openai/v1",
+    });
+  }
   if (usingGemini) {
     return new OpenAI({
       apiKey: geminiKey,
@@ -29,6 +44,17 @@ function client(): OpenAI {
     });
   }
   return new OpenAI({ apiKey: openaiKey });
+}
+
+function stripJsonSchemaFormats(value: unknown): void {
+  if (Array.isArray(value)) {
+    value.forEach(stripJsonSchemaFormats);
+    return;
+  }
+  if (!value || typeof value !== "object") return;
+  const object = value as Record<string, unknown>;
+  delete object.format;
+  Object.values(object).forEach(stripJsonSchemaFormats);
 }
 
 function stripFences(text: string): string {
@@ -60,10 +86,18 @@ export async function completeJson<T>(
   }
   const openai = client();
   const run = async () => {
+    const responseFormat = usingGroq
+      ? zodResponseFormat(schema, "planner_response")
+      : { type: "json_object" as const };
+    if (usingGroq) {
+      const jsonSchema = (responseFormat as unknown as { json_schema: { schema: unknown } }).json_schema.schema;
+      stripJsonSchemaFormats(jsonSchema);
+    }
     const completion = await openai.chat.completions.create({
       model: MODEL,
       temperature: 0.4,
-      response_format: { type: "json_object" },
+      ...(usingGroq ? { max_completion_tokens: 8192, reasoning_effort: "none" as const } : {}),
+      response_format: responseFormat,
       messages: [
         { role: "system", content: `${SYSTEM_GUARDRAILS}\n${extraSystem}`.trim() },
         { role: "user", content: userPrompt },
