@@ -1,0 +1,51 @@
+export const GENAI_MAP = [
+  {
+    surface: "Plan pack",
+    route: "POST /api/plan",
+    adapter: "completeJson + eventPlanSchema",
+    fallback: "demoPlan() when an AI API key is missing or the live call fails",
+    drives: "Budget, timeline, vendors, ideas, next actions",
+  },
+  {
+    surface: "Budget refresh",
+    route: "POST /api/budget",
+    adapter: "completeJson + budgetPlanSchema",
+    fallback: "Slice of demoPlan().budget",
+    drives: "Budget board",
+  },
+  {
+    surface: "Timeline refresh",
+    route: "POST /api/timeline",
+    adapter: "completeJson + eventTimelineSchema",
+    fallback: "Slice of demoPlan().timeline",
+    drives: "Timeline view",
+  },
+  {
+    surface: "Vendor checklist",
+    route: "POST /api/vendors",
+    adapter: "completeJson + vendorChecklistSchema",
+    fallback: "Slice of demoPlan().vendors",
+    drives: "Vendor checklist",
+  },
+  {
+    surface: "Personalised ideas",
+    route: "POST /api/ideas",
+    adapter: "completeJson + ideaBoardSchema",
+    fallback: "Slice of demoPlan().ideas",
+    drives: "Idea fan + cards",
+  },
+  {
+    surface: "Option compare",
+    route: "POST /api/compare",
+    adapter: "completeJson + eventComparisonSchema",
+    fallback: "demoComparison()",
+    drives: "Compare table",
+  },
+  {
+    surface: "Ask Festiva",
+    route: "POST /api/chat",
+    adapter: "completeJson + reply schema, with token-aware trim + summarisation",
+    fallback: "demoChatReply()",
+    drives: "Chat transcript (aria-live)",
+  },
+] as const;
