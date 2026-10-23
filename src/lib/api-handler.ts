@@ -27,14 +27,13 @@ export async function liveOrDemo<T>(args: {
   demo: () => T;
   forceDemo?: boolean;
 }): Promise<{ data: T; demo: boolean; reason?: string }> {
-  const brief = assertBrief(args.brief);
+  assertBrief(args.brief);
   const wantDemo = args.forceDemo || !hasLiveKey();
   if (wantDemo) {
     return { data: args.demo(), demo: true, reason: hasLiveKey() ? "explicit demo" : "missing AI API key" };
   }
   try {
     const { data } = await completeJson(args.prompt, args.schema);
-    void brief;
     return { data, demo: false };
   } catch (error) {
     return {

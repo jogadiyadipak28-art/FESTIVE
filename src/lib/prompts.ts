@@ -42,6 +42,7 @@ consultationQuestions (what to ask a human planner/venue),
 disclaimer (one sentence that this is assistance, not professional advice).
 
 For each vendor, whyNeeded must be a JSON boolean true or false, never a quoted string.
+Every field shown as a list must be returned as a JSON array, even when it contains one item. Never return list fields as prose strings.
 STRICT ENUM VALUES — use ONLY these exact strings (any other value will cause an error):
 - flexibility: "fixed" | "flexible" | "optional"
 - risk: "low" | "watch" | "high"

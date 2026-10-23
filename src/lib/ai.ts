@@ -10,13 +10,13 @@ const openRouterKey = process.env.OPENROUTER_API_KEY;
 const groqKey = process.env.GROQ_API_KEY;
 const geminiKey = process.env.GEMINI_API_KEY;
 const openaiKey = process.env.OPENAI_API_KEY;
-const usingOpenRouter = Boolean(openRouterKey);
 const usingGroq = Boolean(groqKey);
+const usingOpenRouter = Boolean(openRouterKey);
 const usingGemini = Boolean(geminiKey);
-const selectedModel = usingOpenRouter
-  ? process.env.OPENROUTER_MODEL || "openrouter/auto"
-  : usingGroq
-    ? process.env.GROQ_MODEL || "qwen/qwen3.8-27b"
+const selectedModel = usingGroq
+  ? process.env.GROQ_MODEL || "qwen/qwen3.8-27b"
+  : usingOpenRouter
+    ? process.env.OPENROUTER_MODEL || "deepseek/deepseek-v4.1-flash"
   : usingGemini
     ? process.env.GEMINI_MODEL || "gemini-3.8-flash"
     : process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -25,6 +25,13 @@ export const MODEL = selectedModel;
 const summarySchema = z.object({
   summary: z.string().min(1).max(2000),
 });
+
+export class ModelOutputValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ModelOutputValidationError";
+  }
+}
 
 export function hasLiveKey(): boolean {
   return Boolean(
@@ -36,16 +43,16 @@ export function hasLiveKey(): boolean {
 }
 
 function client(): OpenAI {
-  if (usingOpenRouter) {
-    return new OpenAI({
-      apiKey: openRouterKey,
-      baseURL: "https://openrouter.ai/api/v1",
-    });
-  }
   if (usingGroq) {
     return new OpenAI({
       apiKey: groqKey,
       baseURL: "https://api.groq.com/openai/v1",
+    });
+  }
+  if (usingOpenRouter) {
+    return new OpenAI({
+      apiKey: openRouterKey,
+      baseURL: "https://openrouter.ai/api/v1",
     });
   }
   if (usingGemini) {
@@ -134,17 +141,51 @@ function normalizeModelEnums(value: unknown): unknown {
   return normalized;
 }
 
+const arrayFields = new Set([
+  "nextActions", "lines", "savingsIdeas", "overrunRisks", "items", "vendors",
+  "questionsToAsk", "themes", "ideas", "consultationQuestions", "options", "pros", "cons",
+]);
+
+function normalizeModelArrays(value: unknown, field = ""): unknown {
+  if (Array.isArray(value)) return value.map((item) => normalizeModelArrays(item));
+  if (!value || typeof value !== "object") {
+    if (typeof value !== "string" || !arrayFields.has(field)) return value;
+    const trimmed = value.trim();
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) return parsed.map((item) => normalizeModelArrays(item));
+    } catch {
+      // Models sometimes write lists as numbered or bulleted text instead of JSON arrays.
+    }
+    const parts = trimmed
+      .split(/\r?\n|;|\s+(?=\d+[.)]\s)|\s+(?=[•*-]\s)/)
+      .map((part) => part.replace(/^\s*(?:\d+[.)]|[•*-])\s*/, "").trim())
+      .filter(Boolean);
+    return parts.length ? parts : [trimmed];
+  }
+
+  const normalized = value as Record<string, unknown>;
+  for (const [key, item] of Object.entries(normalized)) {
+    normalized[key] = normalizeModelArrays(item, key);
+  }
+  return normalized;
+}
+
 export function parseJson<T>(raw: string, schema: ZodType<T>): T {
   const cleaned = stripFences(raw);
   let parsed: unknown;
   try {
     parsed = JSON.parse(cleaned);
   } catch {
-    throw new Error("Model returned non-JSON output.");
+    throw new ModelOutputValidationError("Model returned non-JSON output.");
   }
-  const result = schema.safeParse(normalizeModelEnums(parsed));
+  const result = schema.safeParse(normalizeModelEnums(normalizeModelArrays(parsed)));
   if (!result.success) {
-    throw new Error(`Model JSON failed schema validation: ${result.error.issues[0]?.message}`);
+    const issue = result.error.issues[0];
+    const path = issue?.path.length ? issue.path.join(".") : "response";
+    throw new ModelOutputValidationError(
+      `Model JSON failed schema validation at ${path}: ${issue?.message ?? "invalid output"}`
+    );
   }
   return result.data;
 }
@@ -159,7 +200,8 @@ export async function completeJson<T>(
   }
   const openai = client();
   const run = async (repairNote?: string) => {
-    const responseFormat = usingGroq
+    const usesStructuredOutput = usingGroq || usingOpenRouter;
+    const responseFormat = usesStructuredOutput
       ? zodResponseFormat(schema, "planner_response")
       : { type: "json_object" as const };
     if (usingGroq) {
@@ -170,6 +212,9 @@ export async function completeJson<T>(
       model: MODEL,
       temperature: 0.4,
       ...(usingGroq ? { max_completion_tokens: 8192, reasoning_effort: "none" as const } : {}),
+      ...(usingOpenRouter
+        ? { provider: { require_parameters: true }, max_tokens: 8192, reasoning: { enabled: false } }
+        : {}),
       response_format: responseFormat,
       messages: [
         { role: "system", content: `${SYSTEM_GUARDRAILS}\n${extraSystem}`.trim() },
@@ -183,27 +228,32 @@ export async function completeJson<T>(
   try {
     return { data: await run(), meta: { mode: "live", model: MODEL } };
   } catch (first) {
+    // Retrying transport, authentication, and rate-limit failures only adds latency.
+    // The repair call is useful when the provider answered but its JSON is invalid.
+    if (!(first instanceof ModelOutputValidationError)) throw first;
     try {
       const detail = first instanceof Error ? first.message : "unknown validation error";
+      const data = await run(
+        `The previous response failed validation (${detail}). Return a corrected complete JSON object matching the requested structure and every allowed value exactly. When a field expects a list, return a JSON array, never a single string. Do not include markdown.`
+      );
       return {
-        data: await run(
-          `The previous response failed validation (${detail}). Return a corrected complete JSON object matching the requested structure and every allowed value exactly. Do not include markdown.`
-        ),
+        data,
         meta: { mode: "live", model: MODEL, reason: "repaired after schema mismatch" },
       };
-    } catch {
-      throw first instanceof Error ? first : new Error("Live model call failed.");
+    } catch (retryError) {
+      throw retryError instanceof Error ? retryError : first instanceof Error ? first : new Error("Live model call failed.");
     }
   }
 }
 
 export function extractiveSummary(messages: { role: string; content: string }[]): string {
-  const older = messages.slice(0, Math.max(0, messages.length - 4));
-  const clipped = older
+  const transcript = messages
     .map((m) => `${m.role}: ${m.content}`)
     .join(" ")
-    .replace(/\s+/g, " ")
-    .slice(0, 900);
+    .replace(/\s+/g, " ");
+  // `messages` already contains only turns removed from the live context window.
+  // Keep its newest details when the bounded extractive memory is full.
+  const clipped = transcript.length > 900 ? `…${transcript.slice(-899)}` : transcript;
   if (!clipped) return "No earlier decisions recorded.";
   return `Earlier context (${estimateTokens(clipped)} est. tokens): ${clipped}`;
 }
@@ -213,7 +263,9 @@ export async function summarizeIfNeeded(
   droppedTokens: number
 ): Promise<string | null> {
   if (!dropped.length) return null;
-  if (!hasLiveKey() || droppedTokens < 400) return extractiveSummary(dropped);
+  // Avoid an extra model round trip for modest history; reserve live summarization
+  // for conversations where preserving older context is likely to pay for its latency.
+  if (!hasLiveKey() || droppedTokens < 1_200) return extractiveSummary(dropped);
   const transcript = dropped.map((m) => `${m.role}: ${m.content}`).join("\n").slice(0, 12000);
   const { data } = await completeJson(
     `Summarise this planning chat for future context. Keep decisions, numbers, names, constraints, and open questions. Max 180 words.\n\n${transcript}\n\nReturn JSON { "summary": string }.`,
