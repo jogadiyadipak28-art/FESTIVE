@@ -41,6 +41,13 @@ ideas { summary, themes, ideas[{title,description,forEventType,budgetFit,imgUrl}
 consultationQuestions (what to ask a human planner/venue),
 disclaimer (one sentence that this is assistance, not professional advice).
 
+STRICT ENUM VALUES — use ONLY these exact strings (any other value will cause an error):
+- flexibility: "fixed" | "flexible" | "optional"
+- risk: "low" | "watch" | "high"
+- priority: "now" | "soon" | "later"
+- status: "required" | "recommended" | "optional"
+- budgetFit: "lean" | "balanced" | "elevated"
+- forEventType: "wedding" | "birthday" | "community"
 Budget line amounts must sum to approximately the stated budget.`;
 }
 
@@ -49,7 +56,8 @@ export function budgetPrompt(brief: EventBrief): string {
 
 ${briefBlock(brief)}
 
-Return JSON matching budget { total, currency, summary, lines, savingsIdeas, overrunRisks }.`;
+Return JSON matching budget { total, currency, summary, lines[{category,amount,percent,notes,flexibility}], savingsIdeas, overrunRisks[{item,risk,mitigation}] }.
+Enum constraints: flexibility must be "fixed"|"flexible"|"optional". risk must be "low"|"watch"|"high".`;
 }
 
 export function timelinePrompt(brief: EventBrief): string {
@@ -57,7 +65,8 @@ export function timelinePrompt(brief: EventBrief): string {
 
 ${briefBlock(brief)}
 
-Return JSON matching timeline { summary, items }. Include permits/insurance notes for community events when relevant.`;
+Return JSON matching timeline { summary, items[{weekOffset,dateHint,title,owner,details,priority}] }. Include permits/insurance notes for community events when relevant.
+Enum constraint: priority must be "now"|"soon"|"later".`;
 }
 
 export function vendorsPrompt(brief: EventBrief): string {
@@ -65,7 +74,8 @@ export function vendorsPrompt(brief: EventBrief): string {
 
 ${briefBlock(brief)}
 
-Return JSON matching vendors { summary, vendors }.`;
+Return JSON matching vendors { summary, vendors[{role,whyNeeded (boolean),status,questionsToAsk,bookingWindow,budgetBand}] }.
+Enum constraint: status must be "required"|"recommended"|"optional".`;
 }
 
 export function ideasPrompt(brief: EventBrief): string {
@@ -73,7 +83,8 @@ export function ideasPrompt(brief: EventBrief): string {
 
 ${briefBlock(brief)}
 
-Return JSON matching ideas { summary, themes, ideas }. Use genuine Unsplash image URLs.`;
+Return JSON matching ideas { summary, themes, ideas[{title,description,forEventType,budgetFit,imgUrl}] }. Use genuine Unsplash image URLs.
+Enum constraints: budgetFit must be "lean"|"balanced"|"elevated". forEventType must be "wedding"|"birthday"|"community".`;
 }
 
 export function comparePrompt(brief: EventBrief, optionA: string, optionB: string): string {

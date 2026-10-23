@@ -72,6 +72,27 @@ function stripFences(text: string): string {
   return text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 }
 
+function normalizeModelEnums(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeModelEnums);
+  if (!value || typeof value !== "object") return value;
+  const normalized = value as Record<string, unknown>;
+  for (const [key, item] of Object.entries(normalized)) {
+    if (key === "flexibility" && typeof item === "string") {
+      const label = item.trim().toLowerCase().replace(/[ _]+/g, "-");
+      if (["required", "essential", "must-have", "non-negotiable", "locked"].includes(label)) {
+        normalized[key] = "fixed";
+      } else if (["nonessential", "discretionary", "nice-to-have", "can-be-cut"].includes(label)) {
+        normalized[key] = "optional";
+      } else if (["flex", "adjustable", "variable", "preferred"].includes(label)) {
+        normalized[key] = "flexible";
+      }
+    } else {
+      normalized[key] = normalizeModelEnums(item);
+    }
+  }
+  return normalized;
+}
+
 export function parseJson<T>(raw: string, schema: ZodType<T>): T {
   const cleaned = stripFences(raw);
   let parsed: unknown;
@@ -80,7 +101,7 @@ export function parseJson<T>(raw: string, schema: ZodType<T>): T {
   } catch {
     throw new Error("Model returned non-JSON output.");
   }
-  const result = schema.safeParse(parsed);
+  const result = schema.safeParse(normalizeModelEnums(parsed));
   if (!result.success) {
     throw new Error(`Model JSON failed schema validation: ${result.error.issues[0]?.message}`);
   }
@@ -96,7 +117,7 @@ export async function completeJson<T>(
     throw new ValidationError("Live model key is not configured.");
   }
   const openai = client();
-  const run = async () => {
+  const run = async (repairNote?: string) => {
     const responseFormat = usingGroq
       ? zodResponseFormat(schema, "planner_response")
       : { type: "json_object" as const };
@@ -112,6 +133,7 @@ export async function completeJson<T>(
       messages: [
         { role: "system", content: `${SYSTEM_GUARDRAILS}\n${extraSystem}`.trim() },
         { role: "user", content: userPrompt },
+        ...(repairNote ? [{ role: "user" as const, content: repairNote }] : []),
       ],
     });
     const text = completion.choices[0]?.message?.content || "";
@@ -121,7 +143,13 @@ export async function completeJson<T>(
     return { data: await run(), meta: { mode: "live", model: MODEL } };
   } catch (first) {
     try {
-      return { data: await run(), meta: { mode: "live", model: MODEL, reason: "retried after schema mismatch" } };
+      const detail = first instanceof Error ? first.message : "unknown validation error";
+      return {
+        data: await run(
+          `The previous response failed validation (${detail}). Return a corrected complete JSON object matching the requested structure and every allowed value exactly. Do not include markdown.`
+        ),
+        meta: { mode: "live", model: MODEL, reason: "repaired after schema mismatch" },
+      };
     } catch {
       throw first instanceof Error ? first : new Error("Live model call failed.");
     }
