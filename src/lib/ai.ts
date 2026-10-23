@@ -6,13 +6,17 @@ import type { AiCallMeta } from "@/lib/types";
 import { estimateTokens } from "@/lib/utils";
 import { ValidationError } from "@/lib/validate";
 
+const openRouterKey = process.env.OPENROUTER_API_KEY;
 const groqKey = process.env.GROQ_API_KEY;
 const geminiKey = process.env.GEMINI_API_KEY;
 const openaiKey = process.env.OPENAI_API_KEY;
+const usingOpenRouter = Boolean(openRouterKey);
 const usingGroq = Boolean(groqKey);
 const usingGemini = Boolean(geminiKey);
-const selectedModel = usingGroq
-  ? process.env.GROQ_MODEL || "qwen/qwen3.8-27b"
+const selectedModel = usingOpenRouter
+  ? process.env.OPENROUTER_MODEL || "openrouter/auto"
+  : usingGroq
+    ? process.env.GROQ_MODEL || "qwen/qwen3.8-27b"
   : usingGemini
     ? process.env.GEMINI_MODEL || "gemini-3.8-flash"
     : process.env.OPENAI_MODEL || "gpt-4o-mini";
@@ -24,6 +28,7 @@ const summarySchema = z.object({
 
 export function hasLiveKey(): boolean {
   return Boolean(
+    (openRouterKey && openRouterKey !== "demo") ||
     (groqKey && groqKey !== "demo") ||
     (geminiKey && geminiKey !== "demo") ||
     (openaiKey && openaiKey !== "demo")
@@ -31,6 +36,12 @@ export function hasLiveKey(): boolean {
 }
 
 function client(): OpenAI {
+  if (usingOpenRouter) {
+    return new OpenAI({
+      apiKey: openRouterKey,
+      baseURL: "https://openrouter.ai/api/v1",
+    });
+  }
   if (usingGroq) {
     return new OpenAI({
       apiKey: groqKey,

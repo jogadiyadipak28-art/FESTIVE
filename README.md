@@ -189,14 +189,14 @@ Copy the example environment file:
 cp .env.example .env.local
 ```
 
-Add a provider API key to `.env.local`. Groq is supported with its OpenAI-compatible endpoint:
+Add an OpenRouter API key to `.env.local` to power the AI planner:
 
 ```env
-GROQ_API_KEY=your_groq_api_key
-GROQ_MODEL=qwen/qwen3.8-27b
+OPENROUTER_API_KEY=your_openrouter_api_key
+OPENROUTER_MODEL=openrouter/auto
 ```
 
-Gemini (`GEMINI_API_KEY`) and OpenAI (`OPENAI_API_KEY`) are also supported.
+OpenRouter's OpenAI-compatible API lets Festiva route requests through its selected model. Gemini (`GEMINI_API_KEY`), Groq (`GROQ_API_KEY`), and OpenAI (`OPENAI_API_KEY`) are also supported as alternatives.
 
 > **Note**: Even without an API key, Festiva works out-of-the-box using the built-in demo dataset!
 
