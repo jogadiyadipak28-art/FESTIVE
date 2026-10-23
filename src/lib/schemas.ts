@@ -1,5 +1,27 @@
 import { z } from "zod";
 
+/* ── Coercion helpers for LLM output tolerance ── */
+const coerceBool = z.preprocess(
+  (v) => {
+    if (typeof v === "string") {
+      const s = v.trim().toLowerCase();
+      if (["true", "yes", "y", "1", "needed", "required"].includes(s)) return true;
+      if (["false", "no", "n", "0", "not needed", "not required", "optional"].includes(s)) return false;
+    }
+    if (typeof v === "number") return v !== 0;
+    return v;
+  },
+  z.boolean()
+);
+const coerceNum = z.preprocess(
+  (v) => (typeof v === "string" ? Number(v.replace(/[^0-9.-]+/g, "")) : v),
+  z.number()
+);
+const lenientUrl = z.string().refine(
+  (s) => s.startsWith("http://") || s.startsWith("https://") || s.startsWith("/"),
+  { message: "Must be a valid URL" }
+);
+
 export const eventTypeSchema = z.enum(["wedding", "birthday", "community"]);
 
 export const eventBriefSchema = z.object({
@@ -20,15 +42,15 @@ export const eventBriefSchema = z.object({
 const riskSchema = z.enum(["low", "watch", "high"]);
 
 export const budgetPlanSchema = z.object({
-  total: z.number(),
+  total: coerceNum,
   currency: z.string(),
   summary: z.string(),
   lines: z
     .array(
       z.object({
         category: z.string(),
-        amount: z.number(),
-        percent: z.number(),
+        amount: coerceNum,
+        percent: coerceNum,
         notes: z.string(),
         flexibility: z.enum(["fixed", "flexible", "optional"]),
       })
@@ -52,7 +74,7 @@ export const eventTimelineSchema = z.object({
   items: z
     .array(
       z.object({
-        weekOffset: z.number(),
+        weekOffset: coerceNum,
         dateHint: z.string(),
         title: z.string(),
         owner: z.string(),
@@ -70,7 +92,7 @@ export const vendorChecklistSchema = z.object({
     .array(
       z.object({
         role: z.string(),
-        whyNeeded: z.boolean(),
+        whyNeeded: coerceBool,
         status: z.enum(["required", "recommended", "optional"]),
         questionsToAsk: z.array(z.string()).min(2).max(6),
         bookingWindow: z.string(),
@@ -91,7 +113,7 @@ export const ideaBoardSchema = z.object({
         description: z.string(),
         forEventType: eventTypeSchema,
         budgetFit: z.enum(["lean", "balanced", "elevated"]),
-        imgUrl: z.string().url(),
+        imgUrl: lenientUrl,
       })
     )
     .min(4)
@@ -118,8 +140,8 @@ export const eventComparisonSchema = z.object({
         name: z.string(),
         pros: z.array(z.string()).min(2).max(6),
         cons: z.array(z.string()).min(1).max(6),
-        estimatedCost: z.number(),
-        fitScore: z.number().min(0).max(100),
+        estimatedCost: coerceNum,
+        fitScore: coerceNum.pipe(z.number().min(0).max(100)),
       })
     )
     .min(2)

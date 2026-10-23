@@ -41,6 +41,7 @@ ideas { summary, themes, ideas[{title,description,forEventType,budgetFit,imgUrl}
 consultationQuestions (what to ask a human planner/venue),
 disclaimer (one sentence that this is assistance, not professional advice).
 
+For each vendor, whyNeeded must be a JSON boolean true or false, never a quoted string.
 STRICT ENUM VALUES — use ONLY these exact strings (any other value will cause an error):
 - flexibility: "fixed" | "flexible" | "optional"
 - risk: "low" | "watch" | "high"
@@ -74,7 +75,7 @@ export function vendorsPrompt(brief: EventBrief): string {
 
 ${briefBlock(brief)}
 
-Return JSON matching vendors { summary, vendors[{role,whyNeeded (boolean),status,questionsToAsk,bookingWindow,budgetBand}] }.
+Return JSON matching vendors { summary, vendors[{role,whyNeeded (boolean),status,questionsToAsk,bookingWindow,budgetBand}] }. whyNeeded must be JSON true or false, never a quoted string.
 Enum constraint: status must be "required"|"recommended"|"optional".`;
 }
 

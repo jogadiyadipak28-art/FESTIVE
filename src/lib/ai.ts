@@ -77,14 +77,55 @@ function normalizeModelEnums(value: unknown): unknown {
   if (!value || typeof value !== "object") return value;
   const normalized = value as Record<string, unknown>;
   for (const [key, item] of Object.entries(normalized)) {
-    if (key === "flexibility" && typeof item === "string") {
+    if (key === "whyNeeded") {
+      if (typeof item === "string") {
+        const answer = item.trim().toLowerCase();
+        if (["true", "yes", "y", "1", "needed", "required"].includes(answer)) {
+          normalized[key] = true;
+        } else if (["false", "no", "n", "0", "not needed", "not required", "optional"].includes(answer)) {
+          normalized[key] = false;
+        }
+      } else if (typeof item === "number") {
+        normalized[key] = item !== 0;
+      }
+    } else if (key === "flexibility" && typeof item === "string") {
       const label = item.trim().toLowerCase().replace(/[ _]+/g, "-");
-      if (["required", "essential", "must-have", "non-negotiable", "locked"].includes(label)) {
+      if (["required", "essential", "must-have", "non-negotiable", "locked", "strict"].includes(label)) {
         normalized[key] = "fixed";
-      } else if (["nonessential", "discretionary", "nice-to-have", "can-be-cut"].includes(label)) {
+      } else if (["nonessential", "discretionary", "nice-to-have", "can-be-cut", "can-cut"].includes(label)) {
         normalized[key] = "optional";
-      } else if (["flex", "adjustable", "variable", "preferred"].includes(label)) {
+      } else if (["flex", "adjustable", "variable", "preferred", "medium", "moderate"].includes(label)) {
         normalized[key] = "flexible";
+      }
+    } else if (key === "risk" && typeof item === "string") {
+      const label = item.trim().toLowerCase();
+      if (["medium", "moderate", "med", "warning"].includes(label)) {
+        normalized[key] = "watch";
+      }
+    } else if (key === "priority" && typeof item === "string") {
+      const label = item.trim().toLowerCase();
+      if (["high", "urgent", "immediate", "critical"].includes(label)) {
+        normalized[key] = "now";
+      } else if (["medium", "med", "normal"].includes(label)) {
+        normalized[key] = "soon";
+      } else if (["low"].includes(label)) {
+        normalized[key] = "later";
+      }
+    } else if (key === "status" && typeof item === "string") {
+      const label = item.trim().toLowerCase();
+      if (["mandatory", "must", "needed"].includes(label)) {
+        normalized[key] = "required";
+      } else if (["suggested", "advised"].includes(label)) {
+        normalized[key] = "recommended";
+      }
+    } else if (key === "budgetFit" && typeof item === "string") {
+      const label = item.trim().toLowerCase();
+      if (["budget", "cheap", "low", "minimal", "basic"].includes(label)) {
+        normalized[key] = "lean";
+      } else if (["mid", "medium", "moderate", "standard", "average"].includes(label)) {
+        normalized[key] = "balanced";
+      } else if (["luxury", "high-end", "premium", "deluxe"].includes(label)) {
+        normalized[key] = "elevated";
       }
     } else {
       normalized[key] = normalizeModelEnums(item);
