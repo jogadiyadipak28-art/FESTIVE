@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { ZodType } from "zod";
 import { completeJson, hasLiveKey } from "@/lib/ai";
-import { ValidationError, assertBrief } from "@/lib/validate";
+import { ValidationError } from "@/lib/validate";
 import type { EventBrief } from "@/lib/types";
 
 export async function readJson(req: Request): Promise<unknown> {
@@ -27,10 +27,13 @@ export async function liveOrDemo<T>(args: {
   demo: () => T;
   forceDemo?: boolean;
 }): Promise<{ data: T; demo: boolean; reason?: string }> {
-  assertBrief(args.brief);
-  const wantDemo = args.forceDemo || !hasLiveKey();
-  if (wantDemo) {
-    return { data: args.demo(), demo: true, reason: hasLiveKey() ? "explicit demo" : "missing AI API key" };
+  const liveKeyAvailable = hasLiveKey();
+  if (args.forceDemo || !liveKeyAvailable) {
+    return {
+      data: args.demo(),
+      demo: true,
+      reason: args.forceDemo ? "explicit demo" : "missing AI API key",
+    };
   }
   try {
     const { data } = await completeJson(args.prompt, args.schema);

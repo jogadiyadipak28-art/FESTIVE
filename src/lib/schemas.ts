@@ -74,7 +74,7 @@ export const eventTimelineSchema = z.object({
   items: z
     .array(
       z.object({
-        weekOffset: coerceNum,
+        weekOffset: coerceNum.pipe(z.number().int()),
         dateHint: z.string(),
         title: z.string(),
         owner: z.string(),

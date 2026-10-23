@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { EVENT_GALLERY } from "@/lib/gallery-cards";
+import { createCalendarIcs } from "@/lib/calendar";
 import { demoPlan } from "@/lib/demo";
 import { eventBriefSchema, eventPlanSchema } from "@/lib/schemas";
 import type {
@@ -233,24 +234,7 @@ export default function Studio({ initialType }: { initialType?: EventType }) {
 
   const exportIcs = () => {
     if (!plan) return;
-    const lines = [
-      "BEGIN:VCALENDAR",
-      "VERSION:2.0",
-      "PRODID:-//Festiva//Planning Assistant//EN",
-      ...plan.timeline.items.map((item, i) => {
-        const stamp = brief.date.replace(/-/g, "");
-        return [
-          "BEGIN:VEVENT",
-          `UID:festiva-${i}@local`,
-          `DTSTAMP:${stamp}T120000Z`,
-          `SUMMARY:${item.title}`,
-          `DESCRIPTION:${item.details.replace(/\n/g, " ")} (${item.dateHint})`,
-          "END:VEVENT",
-        ].join("\r\n");
-      }),
-      "END:VCALENDAR",
-    ];
-    const blob = new Blob([lines.join("\r\n")], { type: "text/calendar" });
+    const blob = new Blob([createCalendarIcs(brief.date, plan.timeline.items)], { type: "text/calendar" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
