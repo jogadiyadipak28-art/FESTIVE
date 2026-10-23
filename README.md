@@ -206,6 +206,16 @@ Groq's OpenAI-compatible API powers Festiva's planning responses. Gemini (`GEMIN
 npm run dev
 ```
 
+### Run quality checks
+
+```bash
+npm test
+npx tsc --noEmit
+npm run lint
+```
+
+The Jest suite covers planner interactions, API route validation and fallback responses, schema parsing, and chat-context budgeting.
+
 Visit [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 5. Build for Production
@@ -253,13 +263,13 @@ Festiva provides deep domain models for different event categories:
 |:---|:---|
 | **Framework** | Next.js 14 (App Router, Serverless Functions) |
 | **Language** | TypeScript 5 (Strict Mode) |
-| **Artificial Intelligence** | OpenAI GPT-4o with structured JSON mode |
-| **Schema Validation** | Zod 3.x |
+| **Artificial Intelligence** | Groq Qwen 3.8 27B via the OpenAI-compatible API; Gemini, OpenRouter, and OpenAI are also supported |
+| **Schema Validation** | Zod 4.x for requests and structured model outputs |
 | **Styling** | Tailwind CSS 3.4, Custom CSS Variables |
 | **Animation & Graphics** | GSAP 3.15, HTML5 Canvas API, SVG Animations |
 | **UI Primitives** | Radix UI (Dialog, Select, Tabs, Separator, Progress) |
 | **Icons** | Lucide React |
-| **Code Quality** | ESLint, TypeScript Strict Checking |
+| **Code Quality & Testing** | ESLint, TypeScript strict checking, Jest, and React Testing Library |
 
 </div>
 
